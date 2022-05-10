@@ -6,7 +6,7 @@ using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 
 using System.ComponentModel;
-using ScottPlot;
+// using ScottPlot;
 
 namespace BlobQuickstartV12
 {
@@ -170,6 +170,24 @@ namespace BlobQuickstartV12
                 Console.WriteLine("{0}={1}", name, value);
             }
 
+            Console.WriteLine("\n");
+            for(int i = 0; i < newTableData.DayOfLogs.Length; i++)
+            {
+                Console.WriteLine("DayOfLog (" + i + "): " + newTableData.DayOfLogs[i]);
+            }
+
+            Console.WriteLine("\n");
+            for(int i = 0; i < newTableData.FwVersionNumber.Length; i++)
+            {
+                Console.WriteLine("FwVersionNumber (" + i + "): " + newTableData.FwVersionNumber[i]);
+            }
+
+            Console.WriteLine("\n");
+            for(int i = 0; i < newTableData.MeterId.Length; i++)
+            {
+                Console.WriteLine("MeterID (" + i + "): " + newTableData.MeterId[i]);
+            }
+
 
             // Plot the log data
             double[] TimeStamps = {};
@@ -253,25 +271,25 @@ namespace BlobQuickstartV12
             string DispUnit = binaryReader.ReadString();
             byte MeterModel = binaryReader.ReadByte();
 
-            int[] FwVersionNumber = {};
+            int[] FwVersionNumber = new int[12];
             for(int i = 0; i < 12; i++)
             {
-                FwVersionNumber.Append(binaryReader.ReadByte());
+                FwVersionNumber[i] = binaryReader.ReadByte();
             }
 
-            int[] MeterId = {};
+            int[] MeterId = new int[8];
             for(int i = 0; i < 8; i++)
             {
-                MeterId.Append(binaryReader.ReadByte());
+                MeterId[i] = binaryReader.ReadByte();
             }
 
             byte SignalQuality = binaryReader.ReadByte();
             byte Spare8_1 = binaryReader.ReadByte();
 
-            int[] DayOfLogs = {};
-            for(int i = 0; i < LogLen; i++)
+            int[] DayOfLogs = new int[48];
+            for(int i = 0; i < 48; i++)
             {
-                DayOfLogs.Append(binaryReader.ReadInt32());
+                DayOfLogs[i] = binaryReader.ReadInt32();
             }
 
             short CRC = binaryReader.ReadInt16();
@@ -317,9 +335,9 @@ namespace BlobQuickstartV12
     
         public static void PlotData(int[] dataX, double[] dataY)
         {
-            var plt = new ScottPlot.Plot(400, 300);
-            plt.AddScatter(dataX, dataY);
-            plt.SaveFig("quickstart.png");
+            // var plt = new ScottPlot.Plot(400, 300);
+            // plt.AddScatter(dataX, dataY);
+            // plt.SaveFig("quickstart.png");
         }
     }
 }
