@@ -1,17 +1,17 @@
-﻿using Azure.Data.Tables;
-using Azure;
-
+﻿
 using System.Text;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
-
 using System.ComponentModel;
+
+using Azure.Data.Tables;
+using Azure;
+
+// Library to use for plotting
 // using ScottPlot;
 
 namespace BlobQuickstartV12
 {
-
-    [Serializable]
     class NewTableData : ITableEntity
     {
 
@@ -27,7 +27,7 @@ namespace BlobQuickstartV12
             byte commandResponseByte,
             int customerID,
             sbyte rssi,
-            int[] dayOfLogs,
+            byte[] dayOfLogs,
             short crc,
             long currentRead,
             ulong spare64,
@@ -51,10 +51,10 @@ namespace BlobQuickstartV12
             byte minute,
             byte second,
             byte spare8_0,
-            string dispUnit,
+            char dispUnit,
             byte meterModel,
-            int[] fwVersionNumber,
-            int[] meterId,
+            byte[] fwVersionNumber,
+            byte[] meterId,
             byte signalQuality,
             byte spare8_1)
         {
@@ -94,6 +94,8 @@ namespace BlobQuickstartV12
             SignalQuality = signalQuality;
             Spare8_1 = spare8_1;
         }
+
+        
         public string PartitionKey { get; set ; }
         public string RowKey { get; set; }
         public DateTimeOffset? Timestamp { get; set; }
@@ -105,8 +107,7 @@ namespace BlobQuickstartV12
         public byte CommandResponseByte { get; set ; }
         public int CustomerID { get; set ; } = 0;
         public sbyte RSSI { get; set ; }
-        public string CMND { get; set ; } = "CMND";
-        public int[] DayOfLogs { get; set; } = { 0 };
+        public byte[] DayOfLogs { get; set; } = { 0 };
         public short CRC { get; set ; }
 
         public long CurrentRead { get; set ; } = 0;
@@ -131,13 +132,14 @@ namespace BlobQuickstartV12
         public byte Minute { get; set ; } = 0;
         public byte Second { get; set ; } = 0;
         public byte Spare8_0 { get; set ; } = 0;
-        public string DispUnit { get; set; } = "M";
+        public char DispUnit { get; set; } = "M"[0];
         public byte MeterModel { get; set ; } = 0;
-        public int[] FwVersionNumber { get; set ; } = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11 };
-        public int[] MeterId { get; set ; } = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        public byte[] FwVersionNumber { get; set ; } = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10, 0x11 };
+        public byte[] MeterId { get; set ; } = { 0, 1, 2, 3, 4, 5, 6, 7 };
         public byte SignalQuality { get; set ; } = 0;
         public byte Spare8_1 { get; set ; } = 0;
     }
+
 
     class Program
     {
@@ -159,8 +161,11 @@ namespace BlobQuickstartV12
             // Get first row from table
             TableEntity currentTableData = results.First<TableEntity>();
 
+
+            string temp = currentTableData.GetString("InputData");
+
             // Parse binary data into NewTableData structure
-            NewTableData newTableData = ParseBinaryData(ConvertToByteArray(currentTableData.GetString("InputData"), Encoding.ASCII));
+            NewTableData newTableData = ParseBinaryData_1(ConvertToByteArray(currentTableData.GetString("InputData")));
 
             // Print each property of the NewTableData object
             foreach(PropertyDescriptor descriptor in TypeDescriptor.GetProperties(newTableData))
@@ -170,33 +175,17 @@ namespace BlobQuickstartV12
                 Console.WriteLine("{0}={1}", name, value);
             }
 
-            Console.WriteLine("\n");
-            for(int i = 0; i < newTableData.DayOfLogs.Length; i++)
-            {
-                Console.WriteLine("DayOfLog (" + i + "): " + newTableData.DayOfLogs[i]);
-            }
 
-            Console.WriteLine("\n");
-            for(int i = 0; i < newTableData.FwVersionNumber.Length; i++)
-            {
-                Console.WriteLine("FwVersionNumber (" + i + "): " + newTableData.FwVersionNumber[i]);
-            }
-
-            Console.WriteLine("\n");
-            for(int i = 0; i < newTableData.MeterId.Length; i++)
-            {
-                Console.WriteLine("MeterID (" + i + "): " + newTableData.MeterId[i]);
-            }
-
+            // Attempt to plot data but not enough time to work through it
 
             // Plot the log data
-            double[] TimeStamps = {};
-            for(int i = 0; i < 48; i++)
-            {
-                TimeStamps.Append(i * 0.5);
-            }
+            // double[] TimeStamps = {};
+            // for(int i = 0; i < 48; i++)
+            // {
+            //     TimeStamps.Append(i * 0.5);
+            // }
 
-            PlotData(newTableData.DayOfLogs, TimeStamps);
+            // PlotData(newTableData.DayOfLogs, TimeStamps);
 
 
             // Use partition key and row key from testInputData table
@@ -208,91 +197,106 @@ namespace BlobQuickstartV12
 
             // Asynchronously add new entry to table with parsed data
             await newTable.AddEntityAsync(newTableData);
-
-
         }
 
-        // Takes in a string and an encoding and 
-        // returns a byte array representing string
-        // in specified encoding.
-        public static byte[] ConvertToByteArray(string str, Encoding encoding)
+        // Takes in a string of bytes and converts
+        // it into a list of those bytes
+        public static List<byte> ConvertToByteArray(string str)
         {
-            return encoding.GetBytes(str);
+            return Enumerable.Range(0, str.Length)
+                             .Where(x => x % 2 == 0)
+                             .Select(x => Convert.ToByte(str.Substring(x, 2), 16))
+                             .ToList<byte>();
         }
 
+
+        // Doesn't serialize data into class properly
         public static NewTableData DeserializeData(TableEntity entity, byte[] binaryData)
         {
             IFormatter formatter = new BinaryFormatter();
             MemoryStream stream = new MemoryStream(binaryData);
-            BinaryReader binaryReader = new BinaryReader(stream);
+            BinaryReader binaryReader = new BinaryReader(stream, Encoding.ASCII);
+            
 
-            NewTableData data = new NewTableData(entity.GetString("PartitionKey"), entity.GetString("RowKey"));
+            NewTableData newTableData = (NewTableData)formatter.Deserialize(stream);
+            newTableData.PartitionKey = entity.GetString("PartitionKey");
+            newTableData.PartitionKey = entity.GetString("RowKey");
 
-            data = (NewTableData)formatter.Deserialize(stream);
 
-            return data;
+            return newTableData;
         }
 
-        // Takes in byte array and parses it into
-        // NewTableData class for inserting into new table
-        public static NewTableData ParseBinaryData(byte[] binaryData)
+
+        // Doesn't provide extra functionality but cleans up code
+        // Takes in a List of bytes and a function(ex: int.Parse), 
+        // converts it to a hex string and the calls the T.Parse 
+        // function (ex: int.Parse) to parse the hex string into 
+        // the correct data type and returns it.
+        public static T ConverData<T>(List<byte> data, Func<string, System.Globalization.NumberStyles, T> f)
         {
-            MemoryStream stream = new MemoryStream(binaryData);
-            BinaryReader binaryReader = new BinaryReader(stream);
+            T retVal = f(Convert.ToHexString(data.ToArray()), System.Globalization.NumberStyles.HexNumber);
+            return retVal;
+        }
 
-            int Addr32 = binaryReader.ReadInt32();
-            int DataLen = binaryReader.ReadInt16();
-            byte CommandResponseByte = binaryReader.ReadByte();
-            int CustomerID = binaryReader.ReadInt16();
-            sbyte RSSI = binaryReader.ReadSByte();
 
-            long CurrentRead = binaryReader.ReadInt64();
-            ulong Spare64 = (ulong)binaryReader.ReadInt64();
-            ushort LogLen = (ushort)binaryReader.ReadInt16();
-            short ErrorFlags = binaryReader.ReadInt16();
-            ushort HardwareVersion = binaryReader.ReadUInt16();
-            ushort Spare16 = binaryReader.ReadUInt16();
-            short BatteryVoltage = binaryReader.ReadInt16();
-            ushort AvgDailyCurrent = binaryReader.ReadUInt16();
-            byte RSSI_1 = binaryReader.ReadByte();
-            byte NoConsumption = binaryReader.ReadByte();
-            byte ActiveFunctions = binaryReader.ReadByte();
-            sbyte TemDegreeF_AVG = binaryReader.ReadSByte();
-            sbyte TempDegreeF_MIN = binaryReader.ReadSByte();
-            sbyte TempDegreeF_MAX = binaryReader.ReadSByte();
-            byte DecimalPosition = binaryReader.ReadByte();
-            byte Day = binaryReader.ReadByte();
-            byte Month = binaryReader.ReadByte();
-            byte Year = binaryReader.ReadByte();
-            byte Hour = binaryReader.ReadByte();
-            byte Minute = binaryReader.ReadByte();
-            byte Second = binaryReader.ReadByte();
-            byte Spare8_0 = binaryReader.ReadByte();
-            string DispUnit = binaryReader.ReadString();
-            byte MeterModel = binaryReader.ReadByte();
+        // Parses the binary data into a hex string
+        // then converts the hexstring into the correct
+        // data type. Returns NewDataTable object with 
+        // all data fields assigned.
+        public static NewTableData ParseBinaryData_1(List<byte> binaryData)
+        {
+            int Addr32 =                ConverData<int>(binaryData.GetRange(0, 4), int.Parse);
+            ushort DataLen =            ConverData<ushort>(binaryData.GetRange(4, 2), ushort.Parse); 
+            byte CommandResponseByte =  ConverData<byte>(binaryData.GetRange(6, 1), byte.Parse);
+            ushort CustomerID =         ConverData<ushort>(binaryData.GetRange(7, 2), ushort.Parse);
+            sbyte RSSI =                ConverData<sbyte>(binaryData.GetRange(9, 1), sbyte.Parse);
+            long CurrentRead =          ConverData<long>(binaryData.GetRange(10, 8), long.Parse);
+            ulong Spare64 =             ConverData<ulong>(binaryData.GetRange(18, 8), ulong.Parse);
+            ushort LogLen =             ConverData<ushort>(binaryData.GetRange(26, 2), ushort.Parse);
+            short ErrorFlags =          ConverData<short>(binaryData.GetRange(28, 2), short.Parse);
+            ushort HardwareVersion =    ConverData<ushort>(binaryData.GetRange(30, 2), ushort.Parse);
+            ushort Spare16 =            ConverData<ushort>(binaryData.GetRange(32, 2), ushort.Parse);
+            short BatteryVoltage =      ConverData<short>(binaryData.GetRange(34, 2), short.Parse);
+            ushort AvgDailyCurrent =    ConverData<ushort>(binaryData.GetRange(36, 2), ushort.Parse);
+            byte RSSI_1 =               ConverData<byte>(binaryData.GetRange(38, 1), byte.Parse);
+            byte NoConsumption =        ConverData<byte>(binaryData.GetRange(39, 1), byte.Parse);
+            byte ActiveFunctions =      ConverData<byte>(binaryData.GetRange(40, 1), byte.Parse);
+            sbyte TemDegreeF_AVG =      ConverData<sbyte>(binaryData.GetRange(41, 1), sbyte.Parse);
+            sbyte TempDegreeF_MIN =     ConverData<sbyte>(binaryData.GetRange(42, 1), sbyte.Parse);
+            sbyte TempDegreeF_MAX =     ConverData<sbyte>(binaryData.GetRange(43, 1), sbyte.Parse);
+            byte DecimalPosition =      ConverData<byte>(binaryData.GetRange(44, 1), byte.Parse);
+            byte Day =                  ConverData<byte>(binaryData.GetRange(45, 1), byte.Parse);
+            byte Month =                ConverData<byte>(binaryData.GetRange(46, 1), byte.Parse);
+            byte Year =                 ConverData<byte>(binaryData.GetRange(47, 1), byte.Parse);
+            byte Hour =                 ConverData<byte>(binaryData.GetRange(48, 1), byte.Parse);
+            byte Minute =               ConverData<byte>(binaryData.GetRange(49, 1), byte.Parse);
+            byte Second =               ConverData<byte>(binaryData.GetRange(50, 1), byte.Parse);
+            byte Spare8_0 =             ConverData<byte>(binaryData.GetRange(51, 1), byte.Parse);
+            char DispUnit =      (char) ConverData<byte>(binaryData.GetRange(52, 1), byte.Parse);
+            byte MeterModel =           ConverData<byte>(binaryData.GetRange(53, 1), byte.Parse);
 
-            int[] FwVersionNumber = new int[12];
+            byte[] FwVersionNumber = new byte[12];
             for(int i = 0; i < 12; i++)
             {
-                FwVersionNumber[i] = binaryReader.ReadByte();
+                FwVersionNumber[i] =  ConverData<byte>(binaryData.GetRange(54 + i, 1), byte.Parse);
             }
 
-            int[] MeterId = new int[8];
+            byte[] MeterId = new byte[8];
             for(int i = 0; i < 8; i++)
             {
-                MeterId[i] = binaryReader.ReadByte();
+                MeterId[i] = ConverData<byte>(binaryData.GetRange(66 + i, 1), byte.Parse);
             }
 
-            byte SignalQuality = binaryReader.ReadByte();
-            byte Spare8_1 = binaryReader.ReadByte();
+            byte SignalQuality =    ConverData<byte>(binaryData.GetRange(74, 1), byte.Parse);
+            byte Spare8_1 =         ConverData<byte>(binaryData.GetRange(75, 1), byte.Parse);
 
-            int[] DayOfLogs = new int[48];
-            for(int i = 0; i < 48; i++)
+            byte[] DayOfLogs = new byte[192];
+            for(int i = 0; i < 185; i++)
             {
-                DayOfLogs[i] = binaryReader.ReadInt32();
+                DayOfLogs[i] = ConverData<byte>(binaryData.GetRange(76 + i, 1), byte.Parse);
             }
 
-            short CRC = binaryReader.ReadInt16();
+            short CRC = ConverData<short>(binaryData.GetRange(261, 2), short.Parse);
 
             return new NewTableData(
                 Addr32,
@@ -333,6 +337,8 @@ namespace BlobQuickstartV12
             );
         }
     
+        // Attempt to plot some data but
+        // not enough time to work through it
         public static void PlotData(int[] dataX, double[] dataY)
         {
             // var plt = new ScottPlot.Plot(400, 300);
